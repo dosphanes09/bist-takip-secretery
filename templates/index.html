@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+{% block title %}Takip Listesi · BIST Takip{% endblock %}
+{% block topbar_meta %}{{ config.flask_host }}:{{ config.flask_port }}{% endblock %}
+
+{% block content %}
+
+{# ==================== DURUM ==================== #}
+<div class="grid-2" style="margin-bottom:16px;">
+
+  <div class="card">
+    <div class="card-body">
+      <div class="row">
+        <div>
+          <div style="font-weight:650;">Rapor</div>
+          <div class="muted" id="job-message" style="margin-top:2px;">
+            {% if job.status == 'running' %}Çalışıyor… {{ job.message }}
+            {% elif job.message %}{{ job.message }}
+            {% else %}Günlük gönderim {{ config.daily_send_time }} ({{ config.timezone }}){% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <form method="post" action="{{ url_for('run') }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="mode" value="preview">
+          <button class="btn btn-sm" {% if job.status == 'running' %}disabled{% endif %}>Önizleme</button>
+        </form>
+        <form method="post" action="{{ url_for('run') }}"
+              onsubmit="return confirm('Rapor e-posta ile gönderilsin mi?');">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="mode" value="send">
+          <button class="btn btn-sm btn-primary"
+                  {% if job.status == 'running' or not smtp_ok %}disabled{% endif %}>Şimdi gönder</button>
+        </form>
+        <a href="{{ url_for('preview') }}" target="_blank"
+           class="btn btn-sm {% if not job.has_preview %}hidden{% endif %}">Önizlemeyi aç</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div style="font-weight:650;">E-posta</div>
+      {% if smtp_ok %}
+        <div class="muted" style="margin-top:2px;">
+          {{ config.smtp.mail_to | join(', ') }} · {{ config.smtp.host }}
+        </div>
+        <form method="post" action="{{ url_for('test_email') }}" style="margin-top:12px;">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm">Test e-postası</button>
+        </form>
+      {% else %}
+        <div class="delta delta-down" style="margin-top:2px;font-size:13px;">Yapılandırılmamış</div>
+        <div class="muted" style="margin-top:4px;">.env eksik: {{ smtp_missing | join(', ') }}</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# ==================== TAKİP LİSTESİ ==================== #}
+<div class="card">
+  <div class="card-head">
+    <div class="row" style="gap:10px;">
+      <span class="card-title">Takip listesi</span>
+      <span class="muted">{{ stocks | selectattr('active') | list | length }} aktif / {{ stocks | length }}</span>
+    </div>
+    <button class="btn btn-sm btn-primary" id="open-picker">+ Hisse ekle</button>
+  </div>
+
+  {% if stocks %}
+  <div style="overflow-x:auto;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Kod</th>
+          <th>Şirket</th>
+          <th class="num">Fiyat</th>
+          <th class="num">Günlük</th>
+          <th class="num">Hedef</th>
+          <th class="num hide-sm">Alarm</th>
+          <th style="width:1%;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for stock in stocks %}
+        <tr class="row-link" data-href="{{ url_for('stock_detail', symbol=stock.symbol) }}"
+            {% if not stock.active %}style="opacity:.5;"{% endif %}>
+          <td>
+            <span class="sym">{{ stock.symbol }}</span>
+            {% if not stock.active %}<div class="muted">pasif</div>{% endif %}
+          </td>
+          <td class="sec" style="font-size:13px;">{{ stock.name or '—' }}</td>
+          {# Fiyat ve günlük değişim sayfa açıldıktan sonra tek istekte doldurulur #}
+          <td class="num" data-price="{{ stock.symbol }}"><span class="muted">…</span></td>
+          <td class="num" data-change="{{ stock.symbol }}"><span class="muted">…</span></td>
+          <td class="num sec">
+            {{ '%g'|format(stock.target_price) if stock.target_price else '—' }}
+          </td>
+          <td class="num sec hide-sm">
+            {% if stock.alert_pct %}%{{ '%g'|format(stock.alert_pct) }}
+            {% else %}<span class="muted">%{{ default_alert_pct }}</span>{% endif %}
+          </td>
+          <td>
+            {# Satır tıklaması detaya gider; buradaki düğmeler onu tetiklemesin. #}
+            <div class="row" style="gap:6px;flex-wrap:nowrap;" data-no-nav>
+              <form method="post" action="{{ url_for('toggle', symbol=stock.symbol) }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm" title="{{ 'Pasifleştir' if stock.active else 'Aktifleştir' }}">
+                  {{ 'Duraklat' if stock.active else 'Sürdür' }}
+                </button>
+              </form>
+              <form method="post" action="{{ url_for('delete', symbol=stock.symbol) }}"
+                    onsubmit="return confirm('{{ stock.symbol }} listeden çıkarılsın mı?');">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-danger" title="Sil">Sil</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="muted" style="padding:10px 16px;border-top:1px solid var(--hairline);">
+    Bir satıra tıklayarak hissenin grafiğini ve dönem performansını görebilirsin.
+  </div>
+  {% else %}
+  <div class="empty">
+    Takip listesi boş.<br>
+    <button class="btn btn-primary btn-sm" style="margin-top:14px;" id="open-picker-empty">+ İlk hisseni ekle</button>
+  </div>
+  {% endif %}
+</div>
+
+{# ==================== SON ÇALIŞTIRMALAR ==================== #}
+{% if runs %}
+<div class="card" style="margin-top:16px;">
+  <div class="card-head"><span class="card-title">Son çalıştırmalar</span></div>
+  <div style="overflow-x:auto;">
+    <table class="table">
+      <thead>
+        <tr><th>Zaman</th><th>Kaynak</th><th class="num">Hisse</th>
+            <th class="num">Başarısız</th><th>E-posta</th><th>Hata</th></tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+        <tr>
+          <td class="sec" style="white-space:nowrap;">{{ run.started_at[:19].replace('T',' ') }}</td>
+          <td class="muted">{{ run.trigger or '—' }}</td>
+          <td class="num sec">{{ run.symbols if run.symbols is not none else '—' }}</td>
+          <td class="num">
+            {% if run.failures %}<span class="delta delta-down">{{ run.failures }}</span>
+            {% else %}<span class="sec">{{ run.failures if run.failures is not none else '—' }}</span>{% endif %}
+          </td>
+          <td>
+            {% if run.email_sent %}<span class="delta delta-up">✓ gitti</span>
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+          <td class="muted" style="max-width:280px;word-break:break-word;">{{ run.error or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<p class="muted" style="margin-top:18px;">
+  Kişisel takip amaçlıdır, yatırım tavsiyesi değildir. Fiyatlar gecikmeli olabilir.
+</p>
+
+{# ==================== HİSSE SEÇİCİ ==================== #}
+<div class="modal-backdrop" id="picker" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 class="modal-title" id="picker-title">Hisse ekle</h2>
+      <input class="input" id="picker-search" type="search" autocomplete="off"
+             placeholder="Kod veya şirket adı yaz — THYAO, garanti, hava…"
+             aria-label="Hisse ara" aria-controls="picker-results">
+      <div class="row" style="margin-top:10px;justify-content:space-between;">
+        <span class="muted" id="picker-hint">Yazmaya başla, listelensin.</span>
+        <label class="muted row" style="gap:6px;cursor:pointer;">
+          <input type="checkbox" id="picker-only-100"> Yalnızca BIST 100
+        </label>
+      </div>
+    </div>
+
+    <div id="picker-results" role="listbox" aria-label="Arama sonuçları"
+         style="max-height:46vh;overflow-y:auto;"></div>
+
+    <div class="card-head" style="border-top:1px solid var(--hairline);border-bottom:none;">
+      <span class="muted">↑↓ gez · Enter ekle · Esc kapat</span>
+      <button class="btn btn-sm" id="picker-close">Kapat</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CSRF = "{{ csrf_token() }}";
+
+/* ---------- Satır tıklaması → detay sayfası ---------------------------- */
+document.querySelectorAll('tr.row-link').forEach(row => {
+  row.addEventListener('click', ev => {
+    if (ev.target.closest('[data-no-nav]')) return;   // düğmeler hariç
+    window.location.href = row.dataset.href;
+  });
+});
+
+/* ---------- Takip listesindeki canlı fiyatlar --------------------------
+   Sayfa hemen açılıyor, fiyatlar arkadan tek istekte geliyor. Böylece yavaş
+   bir veri kaynağı listenin görünmesini geciktirmiyor.
+   Yön rengi TEK BAŞINA anlam taşımıyor: ok ve işaretli sayı hep eşlik ediyor. */
+(async function loadQuotes() {
+  const cells = document.querySelectorAll('[data-price]');
+  if (!cells.length) return;
+
+  const nf = (v, d) => v === null || v === undefined
+    ? '—' : v.toLocaleString('tr-TR', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+  try {
+    const data = await (await fetch('{{ url_for("api_quotes") }}')).json();
+    const quotes = data.quotes || {};
+
+    document.querySelectorAll('[data-price]').forEach(cell => {
+      const q = quotes[cell.dataset.price];
+      cell.textContent = '';
+      if (!q || q.last === null) { cell.innerHTML = '<span class="muted">—</span>'; return; }
+      const span = document.createElement('span');
+      span.style.fontVariantNumeric = 'tabular-nums';
+      span.textContent = nf(q.last, 2);
+      cell.appendChild(span);
+    });
+
+    document.querySelectorAll('[data-change]').forEach(cell => {
+      const q = quotes[cell.dataset.change];
+      cell.textContent = '';
+      if (!q || q.change_percent === null || q.change_percent === undefined) {
+        cell.innerHTML = '<span class="muted">—</span>'; return;
+      }
+      const pct = q.change_percent;
+      const flat = Math.abs(pct) < 0.005;
+      const span = document.createElement('span');
+      span.className = 'delta ' + (flat ? 'delta-flat' : (pct > 0 ? 'delta-up' : 'delta-down'));
+      span.style.justifyContent = 'flex-end';
+
+      const arrow = document.createElement('span');
+      arrow.className = 'arrow';
+      arrow.setAttribute('aria-hidden', 'true');
+      arrow.textContent = flat ? '→' : (pct > 0 ? '▲' : '▼');
+
+      const text = document.createElement('span');
+      text.textContent = '%' + (pct > 0 ? '+' : '') + nf(pct, 2);
+
+      span.append(arrow, text);
+      span.setAttribute('aria-label',
+        (flat ? 'değişim yok' : (pct > 0 ? 'yükseliş' : 'düşüş')) + ' yüzde ' + nf(Math.abs(pct), 2));
+      cell.appendChild(span);
+    });
+  } catch (e) {
+    document.querySelectorAll('[data-price],[data-change]').forEach(cell => {
+      cell.innerHTML = '<span class="muted">—</span>';
+    });
+  }
+})();
+
+/* ---------- Arka plan işi durumu -------------------------------------- */
+(function () {
+  if ({{ 'true' if job.status == 'running' else 'false' }} !== true) return;
+  const label = document.getElementById('job-message');
+  const poll = setInterval(async () => {
+    try {
+      const data = await (await fetch('{{ url_for("status") }}')).json();
+      label.textContent = data.status === 'running'
+        ? 'Çalışıyor… ' + (data.message || '')
+        : (data.message || 'Tamamlandı.');
+      if (data.status !== 'running') { clearInterval(poll); setTimeout(() => location.reload(), 700); }
+    } catch (e) { clearInterval(poll); }
+  }, 2500);
+})();
+
+/* ====================================================================== */
+/*  HİSSE SEÇİCİ                                                          */
+/* ====================================================================== */
+(function () {
+  const backdrop = document.getElementById('picker');
+  const search   = document.getElementById('picker-search');
+  const results  = document.getElementById('picker-results');
+  const hint     = document.getElementById('picker-hint');
+  const only100  = document.getElementById('picker-only-100');
+
+  let items = [];       // görüntülenen şirketler
+  let active = -1;      // klavye ile seçili satır
+  let bist100 = null;   // BIST 100 kod kümesi (tembel yüklenir)
+  let debounce;
+
+  function open() {
+    backdrop.classList.add('open');
+    search.value = '';
+    search.focus();
+    load('');
+  }
+  function close() {
+    backdrop.classList.remove('open');
+  }
+
+  document.getElementById('open-picker')?.addEventListener('click', open);
+  document.getElementById('open-picker-empty')?.addEventListener('click', open);
+  document.getElementById('picker-close').addEventListener('click', close);
+  backdrop.addEventListener('click', ev => { if (ev.target === backdrop) close(); });
+
+  document.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && backdrop.classList.contains('open')) close();
+  });
+
+  search.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => load(search.value), 180);
+  });
+
+  search.addEventListener('keydown', ev => {
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); move(1); }
+    else if (ev.key === 'ArrowUp') { ev.preventDefault(); move(-1); }
+    else if (ev.key === 'Enter') {
+      ev.preventDefault();
+      const target = active >= 0 ? items[active] : items.find(i => !i.added);
+      if (target) addStock(target.ticker);
+    }
+  });
+
+  only100.addEventListener('change', () => load(search.value));
+
+  function move(step) {
+    const selectable = items.length;
+    if (!selectable) return;
+    active = (active + step + selectable) % selectable;
+    render();
+    results.children[active]?.scrollIntoView({ block: 'nearest' });
+  }
+
+  async function ensureBist100() {
+    if (bist100 !== null) return bist100;
+    try {
+      const data = await (await fetch('{{ url_for("api_bist100") }}')).json();
+      bist100 = new Set(data.symbols || []);
+    } catch (e) { bist100 = new Set(); }
+    return bist100;
+  }
+
+  async function load(query) {
+    hint.textContent = 'Aranıyor…';
+    try {
+      const url = '{{ url_for("api_companies") }}?q=' + encodeURIComponent(query || '');
+      const data = await (await fetch(url)).json();
+      items = data.companies || [];
+
+      if (only100.checked) {
+        const set = await ensureBist100();
+        if (set.size) items = items.filter(c => set.has(c.ticker));
+      }
+
+      active = -1;
+      render();
+      hint.textContent = data.ok
+        ? `${items.length} sonuç`
+        : 'Şirket listesi alınamadı — kodu elle yazıp ekleyebilirsin.';
+    } catch (e) {
+      items = [];
+      render();
+      hint.textContent = 'Arama başarısız.';
+    }
+  }
+
+  function render() {
+    results.textContent = '';
+
+    if (!items.length) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'Sonuç yok.';
+      results.appendChild(empty);
+      return;
+    }
+
+    items.forEach((company, index) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.setAttribute('role', 'option');
+      row.setAttribute('aria-selected', String(index === active));
+      row.style.cssText =
+        'padding:10px 18px;border-bottom:1px solid var(--hairline);gap:12px;' +
+        'flex-wrap:nowrap;' + (index === active ? 'background:var(--surface-2);' : '');
+
+      const text = document.createElement('div');
+      text.style.cssText = 'min-width:0;flex:1;';
+
+      const code = document.createElement('div');
+      code.className = 'sym';
+      code.textContent = company.ticker;          // güvenli: metin olarak eklenir
+
+      const name = document.createElement('div');
+      name.className = 'muted';
+      name.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      name.textContent = company.name || '';
+
+      text.append(code, name);
+
+      const action = document.createElement('div');
+      if (company.added) {
+        const added = document.createElement('span');
+        added.className = 'badge';
+        added.textContent = '✓ listede';
+        action.appendChild(added);
+      } else {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-sm btn-primary';
+        btn.textContent = 'Ekle';
+        btn.addEventListener('click', ev => { ev.stopPropagation(); addStock(company.ticker); });
+        action.appendChild(btn);
+      }
+
+      row.append(text, action);
+      row.addEventListener('mouseenter', () => { active = index; });
+      results.appendChild(row);
+    });
+  }
+
+  async function addStock(ticker) {
+    const body = new FormData();
+    body.append('_csrf_token', CSRF);
+    body.append('symbol', ticker);
+
+    try {
+      const response = await fetch('{{ url_for("add") }}', { method: 'POST', body });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+
+      const item = items.find(i => i.ticker === ticker);
+      if (item) { item.added = true; render(); }
+      hint.textContent = ticker + ' eklendi. Kapatınca liste yenilenecek.';
+      backdrop.dataset.changed = '1';
+    } catch (e) {
+      hint.textContent = 'Eklenemedi: ' + e.message;
+    }
+  }
+
+  // Modal kapanırken bir şey eklendiyse listeyi tazele
+  const observer = new MutationObserver(() => {
+    if (!backdrop.classList.contains('open') && backdrop.dataset.changed === '1') {
+      location.reload();
+    }
+  });
+  observer.observe(backdrop, { attributes: true, attributeFilter: ['class'] });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,27 @@
+# --- Çekirdek ---
+# Alt sınırlar güvenlik yamalarını içeren sürümlere göre belirlenmiştir.
+Flask>=3.0,<4.0            # web arayüzü
+Werkzeug>=3.0.6            # Flask'ın WSGI katmanı — güvenlik düzeltmeleri için taban
+Jinja2>=3.1.5,<4.0         # HTML e-posta şablonu; autoescape XSS savunmasının temeli
+python-dotenv>=1.0,<2.0    # .env okuma
+schedule>=1.2,<2.0         # günlük zamanlama
+requests>=2.32.4,<3.0      # KAP resmî API
+urllib3>=2.5.0             # requests'in taşıyıcısı — eski sürümlerde bilinen açıklar var
+certifi>=2024.7.4          # TLS kök sertifikaları — güncel tutulması önemli
+feedparser>=6.0,<7.0       # Google News RSS
+
+# --- Veri sağlayıcılar ---
+borsapy>=0.11,<1.0         # BIST fiyat + KAP + analist hedef fiyatları
+yfinance>=0.2.40           # yedek fiyat kaynağı (THYAO.IS)
+pandas>=2.0                # borsapy/yfinance DataFrame çıktıları için
+
+# Not: SQLite ve smtplib Python standart kütüphanesindedir, ek kurulum gerekmez.
+
+# --- Güvenlik notu ---
+# Sanal ortamı kurduktan sonra ortam araçlarını da güncelle:
+#     pip install -U pip setuptools
+# setuptools'un 83.0.0 öncesi sürümlerinde bilinen bir açık var (PYSEC-2026-3447).
+# Uygulamanın çalışma zamanı bağımlılığı değildir ama sanal ortamda bulunur.
+#
+# Bağımlılıkları düzenli denetlemek için:
+#     pip install pip-audit && pip-audit

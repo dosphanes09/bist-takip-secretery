@@ -1,0 +1,21 @@
+# Gizli bilgiler — asla commit'lenmemeli
+.env
+
+# Uygulama verisi ve çıktıları
+data/
+logs/
+outbox/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Editör / işletim sistemi
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

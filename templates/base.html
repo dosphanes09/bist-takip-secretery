@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>{% block title %}BIST Takip{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='bist-takip.ico') }}">
+  {# Tüm stiller yerel — internet olmadan da arayüz düzgün görünür. #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="{{ url_for('index') }}">
+      <span class="brand-mark">₺</span>
+      BIST Takip
+    </a>
+    <span class="topbar-meta">{% block topbar_meta %}{% endblock %}</span>
+  </div>
+</header>
+
+<main class="wrap py">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+      <div class="alert alert-{{ category }}" role="status">
+        <span>{{ message }}</span>
+        <button class="close" type="button" aria-label="Kapat"
+                onclick="this.parentElement.remove()">&times;</button>
+      </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</main>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

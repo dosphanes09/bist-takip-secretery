@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Hata · BIST Takip{% endblock %}
+
+{% block content %}
+{# Güvenlik: burada asla ham istisna metni ya da yığın izi gösterilmez (O-5).
+   Ayrıntı yalnızca log dosyasına yazılır; kullanıcıya log'da aramasını
+   sağlayacak kısa bir referans kodu verilir. #}
+<div class="card">
+  <div class="card-header text-danger">
+    {% if status == 403 %}İstek reddedildi
+    {% elif status == 401 %}Kimlik doğrulama gerekli
+    {% elif status == 400 %}Geçersiz istek
+    {% elif status == 404 %}Sayfa bulunamadı
+    {% else %}Beklenmeyen bir hata oluştu{% endif %}
+  </div>
+  <div class="card-body">
+
+    {% if message %}
+    <p class="mb-3">{{ message }}</p>
+    {% else %}
+    <p class="mb-3">İşlem tamamlanamadı.</p>
+    {% endif %}
+
+    {% if status == 403 %}
+    <p class="small text-muted mb-3">
+      Bu genellikle sayfanın uzun süre açık kalmasından kaynaklanır — güvenlik
+      belirteci (CSRF token) zaman aşımına uğramıştır. Sayfayı yenileyip
+      işlemi tekrarla.
+    </p>
+    {% endif %}
+
+    {% if reference %}
+    <p class="small text-muted mb-3">
+      Ayrıntılar <code class="env">logs/bist.log</code> dosyasına yazıldı.
+      Referans kodu: <code class="env">{{ reference }}</code>
+    </p>
+    {% endif %}
+
+    <a href="{{ url_for('index') }}" class="btn btn-sm btn-primary">Ana sayfaya dön</a>
+  </div>
+</div>
+{% endblock %}

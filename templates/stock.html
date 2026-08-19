@@ -1,0 +1,409 @@
+{% extends "base.html" %}
+{% block title %}{{ symbol }} · BIST Takip{% endblock %}
+{% block topbar_meta %}<a href="{{ url_for('index') }}">← Takip listesi</a>{% endblock %}
+
+{% block content %}
+
+{# ==================== BAŞLIK + ANLIK FİYAT ==================== #}
+<div class="card">
+  <div class="card-body">
+    <div class="row" style="justify-content:space-between;align-items:flex-start;">
+      <div style="min-width:0;">
+        <div class="row" style="gap:10px;">
+          <h1 style="margin:0;font-size:24px;letter-spacing:-.3px;">{{ symbol }}</h1>
+          {% if not in_watchlist %}
+          <span class="badge badge-off">takip listende değil</span>
+          {% endif %}
+        </div>
+        {% if name %}<div class="sec" style="margin-top:3px;">{{ name }}</div>{% endif %}
+      </div>
+
+      <div style="text-align:right;" id="quote-box">
+        <div class="muted">yükleniyor…</div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:14px;gap:8px;" id="quote-meta"></div>
+  </div>
+</div>
+
+{# ==================== DÖNEM SEÇİCİ + GRAFİK ====================
+   Filtre satırı grafiğin ÜSTÜNDE ve tek sıra — kart içinde değil. #}
+<div class="row" style="margin:16px 0 12px;justify-content:space-between;">
+  <div class="row" style="gap:6px;" role="group" aria-label="Dönem seçimi" id="period-row">
+    {% for key, spec in periods.items() %}
+    <button class="btn btn-sm period-btn" data-period="{{ key }}"
+            aria-pressed="{{ 'true' if key == default_period else 'false' }}">{{ spec.short }}</button>
+    {% endfor %}
+  </div>
+  <button class="btn btn-sm" id="toggle-table" aria-expanded="false">Tabloyu göster</button>
+</div>
+
+<div class="card">
+  <div class="card-body" style="position:relative;">
+    <div id="chart-status" class="muted" style="margin-bottom:8px;">Grafik yükleniyor…</div>
+
+    {# Kap yüksekliği x ekseni bandını da içeriyor — iç kaydırma çubuğu oluşmasın.
+       Tooltip bu kabın İÇİNDE ve kap position:relative — aksi halde kart
+       dolgusu kadar kayıyor ve crosshair'in üstüne biniyordu. #}
+    <div id="chart-wrap" style="position:relative;width:100%;">
+      <div id="chart" style="width:100%;min-height:320px;transition:opacity .15s ease;"></div>
+
+      <div id="tooltip" hidden role="status"
+           style="position:absolute;pointer-events:none;background:var(--surface-2);
+                  border:1px solid var(--hairline);border-radius:8px;padding:8px 11px;
+                  box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:5;min-width:132px;"></div>
+    </div>
+  </div>
+
+  {# Grafiğin tablo ikizi: aynı veriler, fareyle gezinmeden erişilebilir #}
+  <div id="table-view" class="hidden" style="border-top:1px solid var(--hairline);max-height:340px;overflow-y:auto;">
+    <table class="table">
+      <thead>
+        <tr><th>Tarih</th><th class="num">Kapanış</th><th class="num">Açılış</th>
+            <th class="num">Yüksek</th><th class="num">Düşük</th><th class="num">Hacim</th></tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+
+  <div class="stat-row" id="period-stats"></div>
+</div>
+
+{# ==================== TÜM DÖNEM PERFORMANSI ==================== #}
+<div class="card" style="margin-top:16px;">
+  <div class="card-head">
+    <span class="card-title">Dönem performansı</span>
+    <span class="muted">dönem başına göre değişim</span>
+  </div>
+  <div class="stat-row" id="performance-row">
+    <div class="stat"><div class="muted">yükleniyor…</div></div>
+  </div>
+</div>
+
+{# ==================== TAKİP AYARLARI ==================== #}
+<div class="card" style="margin-top:16px;">
+  <div class="card-head"><span class="card-title">Takip ayarları</span></div>
+  <div class="card-body">
+    {% if in_watchlist %}
+    <form method="post" action="{{ url_for('update', symbol=symbol) }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="row" style="gap:14px;align-items:flex-end;">
+        <div style="flex:0 0 160px;">
+          <label class="label" for="target_price">Hedef fiyat (TL)</label>
+          <input class="input input-sm" id="target_price" name="target_price" inputmode="decimal"
+                 value="{{ '%g'|format(stock.target_price) if stock.target_price else '' }}"
+                 placeholder="opsiyonel">
+        </div>
+        <div style="flex:0 0 160px;">
+          <label class="label" for="alert_pct">Alarm eşiği (%)</label>
+          <input class="input input-sm" id="alert_pct" name="alert_pct" inputmode="decimal"
+                 value="{{ '%g'|format(stock.alert_pct) if stock.alert_pct else '' }}"
+                 placeholder="varsayılan {{ config.default_alert_pct }}">
+        </div>
+        <div style="flex:1;min-width:180px;">
+          <label class="label" for="notes">Not</label>
+          <input class="input input-sm" id="notes" name="notes"
+                 value="{{ stock.notes or '' }}" placeholder="opsiyonel">
+        </div>
+        <button class="btn btn-sm btn-primary">Kaydet</button>
+      </div>
+    </form>
+    {% else %}
+    <div class="row" style="justify-content:space-between;">
+      <span class="sec">Bu hisse takip listende değil.</span>
+      <form method="post" action="{{ url_for('add') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="symbol" value="{{ symbol }}">
+        <button class="btn btn-sm btn-primary">Takip listesine ekle</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ==================== KAP + HABERLER ==================== #}
+<div class="grid-2" style="margin-top:16px;">
+  <div class="card">
+    <div class="card-head"><span class="card-title">KAP bildirimleri</span></div>
+    <div id="kap-list"><div class="empty">yükleniyor…</div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><span class="card-title">Haberler</span></div>
+    <div id="news-list"><div class="empty">yükleniyor…</div></div>
+  </div>
+</div>
+
+<p class="muted" style="margin-top:18px;">
+  Fiyat verileri gecikmeli olabilir. Yatırım tavsiyesi değildir.
+</p>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='chart.js') }}"></script>
+<script>
+const SYMBOL = {{ symbol | tojson }};
+const DEFAULT_PERIOD = {{ default_period | tojson }};
+const fmt = window.chartFormat;
+
+/* Yön göstergesi: renk TEK BAŞINA anlam taşımaz — ok ve işaretli sayı hep var.
+   (Yeşil↔kırmızı renk körlüğünde ayrılmıyor; ölçülen CVD ΔE 4.1.) */
+function deltaNode(percent, opts) {
+  opts = opts || {};
+  const span = document.createElement("span");
+  if (percent === null || percent === undefined || Number.isNaN(percent)) {
+    span.className = "delta delta-flat";
+    span.textContent = "—";
+    return span;
+  }
+  const up = percent > 0, flat = Math.abs(percent) < 0.005;
+  span.className = "delta " + (flat ? "delta-flat" : (up ? "delta-up" : "delta-down"));
+  if (opts.size) span.style.fontSize = opts.size;
+
+  const arrow = document.createElement("span");
+  arrow.className = "arrow";
+  arrow.setAttribute("aria-hidden", "true");
+  arrow.textContent = flat ? "→" : (up ? "▲" : "▼");
+
+  const text = document.createElement("span");
+  const sign = percent > 0 ? "+" : "";
+  text.textContent = "%" + sign + fmt.number(percent, 2);
+
+  span.append(arrow, text);
+  span.setAttribute("aria-label",
+    (flat ? "değişim yok" : (up ? "yükseliş" : "düşüş")) + " yüzde " + fmt.number(Math.abs(percent), 2));
+  return span;
+}
+
+function statTile(label, valueNode) {
+  const box = document.createElement("div");
+  box.className = "stat";
+  const l = document.createElement("div");
+  l.className = "stat-label";
+  l.textContent = label;
+  const v = document.createElement("div");
+  v.className = "stat-value";
+  if (typeof valueNode === "string") v.textContent = valueNode;
+  else v.appendChild(valueNode);
+  box.append(l, v);
+  return box;
+}
+
+/* ---------- Grafik ----------------------------------------------------- */
+const chartBox = document.getElementById("chart");
+const chart = LineChart(chartBox, {
+  height: 320,
+  tooltip: document.getElementById("tooltip"),
+  ariaLabel: SYMBOL + " fiyat grafiği",
+});
+
+let currentPeriod = DEFAULT_PERIOD;
+let lastCandles = [];
+
+async function loadPeriod(period) {
+  currentPeriod = period;
+
+  document.querySelectorAll(".period-btn").forEach(btn => {
+    const on = btn.dataset.period === period;
+    btn.setAttribute("aria-pressed", String(on));
+    btn.classList.toggle("btn-primary", on);
+  });
+
+  // Yeniden yüklerken önceki çizim soluk tutuluyor — iskelet yanıp sönmesi yok
+  chartBox.style.opacity = ".45";
+  document.getElementById("chart-status").textContent = "Yükleniyor…";
+
+  try {
+    const data = await (await fetch(`/api/history/${SYMBOL}?period=${period}`)).json();
+    if (!data.ok) throw new Error(data.error || "veri yok");
+
+    lastCandles = data.candles || [];
+    chart.setData(lastCandles, data.interval);
+    renderTable(lastCandles);
+    renderPeriodStats(data.summary);
+
+    document.getElementById("chart-status").textContent =
+      `${data.summary.count} veri noktası · kaynak ${data.source}`;
+  } catch (err) {
+    chart.clear();
+    lastCandles = [];
+    document.getElementById("chart-status").textContent = "Fiyat geçmişi alınamadı.";
+    document.getElementById("period-stats").textContent = "";
+    renderTable([]);
+  } finally {
+    chartBox.style.opacity = "1";
+  }
+}
+
+function renderPeriodStats(summary) {
+  const row = document.getElementById("period-stats");
+  row.textContent = "";
+  if (!summary) return;
+
+  row.appendChild(statTile("Dönem değişimi", deltaNode(summary.change_percent)));
+  row.appendChild(statTile("Dönem başı", fmt.number(summary.first, 2) + " TL"));
+  row.appendChild(statTile("En yüksek", fmt.number(summary.high, 2)));
+  row.appendChild(statTile("En düşük", fmt.number(summary.low, 2)));
+  if (summary.average_volume) {
+    row.appendChild(statTile("Ort. hacim", fmt.number(summary.average_volume, 0)));
+  }
+}
+
+function renderTable(candles) {
+  const body = document.getElementById("table-body");
+  body.textContent = "";
+  // Tablo en yeniden eskiye — okuyucu güncel veriyi önce görsün
+  candles.slice().reverse().forEach(c => {
+    const tr = document.createElement("tr");
+    const cells = [
+      fmt.date(c.t, "1d"),
+      fmt.number(c.c, 2), fmt.number(c.o, 2),
+      fmt.number(c.h, 2), fmt.number(c.l, 2),
+      c.v ? fmt.number(c.v, 0) : "—",
+    ];
+    cells.forEach((text, i) => {
+      const td = document.createElement("td");
+      td.textContent = text;
+      if (i > 0) td.className = "num sec";
+      else td.className = "sec";
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+}
+
+document.getElementById("period-row").addEventListener("click", ev => {
+  const btn = ev.target.closest(".period-btn");
+  if (btn) loadPeriod(btn.dataset.period);
+});
+
+document.getElementById("toggle-table").addEventListener("click", ev => {
+  const view = document.getElementById("table-view");
+  const shown = !view.classList.toggle("hidden");
+  ev.target.textContent = shown ? "Tabloyu gizle" : "Tabloyu göster";
+  ev.target.setAttribute("aria-expanded", String(shown));
+});
+
+/* ---------- Anlık fiyat ------------------------------------------------ */
+async function loadQuote() {
+  const box = document.getElementById("quote-box");
+  const meta = document.getElementById("quote-meta");
+  try {
+    const q = await (await fetch(`/api/quote/${SYMBOL}`)).json();
+    if (!q.ok) throw new Error();
+
+    box.textContent = "";
+    const price = document.createElement("div");
+    price.style.cssText = "font-size:30px;font-weight:680;line-height:1.1;";
+    price.textContent = fmt.number(q.last, 2) + " TL";
+    const delta = deltaNode(q.change_percent, { size: "14px" });
+    delta.style.marginTop = "4px";
+    box.append(price, delta);
+
+    meta.textContent = "";
+    const pairs = [
+      ["Açılış", fmt.number(q.open, 2)],
+      ["Yüksek", fmt.number(q.high, 2)],
+      ["Düşük", fmt.number(q.low, 2)],
+      ["Önceki kapanış", fmt.number(q.previous_close, 2)],
+      ["Hacim", q.volume ? fmt.number(q.volume, 0) : "—"],
+    ];
+    pairs.forEach(([label, value]) => {
+      const chip = document.createElement("span");
+      chip.className = "badge";
+      chip.textContent = label + " " + value;
+      meta.appendChild(chip);
+    });
+    if (q.source) {
+      const src = document.createElement("span");
+      src.className = "muted";
+      src.textContent = "kaynak " + q.source;
+      meta.appendChild(src);
+    }
+  } catch (e) {
+    box.textContent = "";
+    const err = document.createElement("div");
+    err.className = "delta delta-down";
+    err.textContent = "Fiyat alınamadı";
+    box.appendChild(err);
+  }
+}
+
+/* ---------- Tüm dönem performansı -------------------------------------- */
+async function loadPerformance() {
+  const row = document.getElementById("performance-row");
+  try {
+    const data = await (await fetch(`/api/performance/${SYMBOL}`)).json();
+    if (!data.ok) throw new Error();
+    row.textContent = "";
+    // Sunucu sıralı liste döndürüyor (sözlük olsaydı alfabetik karışırdı)
+    (data.periods || []).forEach(info => {
+      row.appendChild(statTile(info.label, info.ok ? deltaNode(info.change_percent) : "—"));
+    });
+  } catch (e) {
+    row.textContent = "";
+    const box = document.createElement("div");
+    box.className = "stat";
+    box.textContent = "Performans verisi alınamadı.";
+    row.appendChild(box);
+  }
+}
+
+/* ---------- KAP + haberler --------------------------------------------- */
+function renderItems(target, items, emptyText) {
+  target.textContent = "";
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = emptyText;
+    target.appendChild(empty);
+    return;
+  }
+  items.forEach(item => {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "padding:12px 16px;border-bottom:1px solid var(--hairline);";
+
+    // Şema doğrulanmış URL'ler bağlantı olur; olmayanlar düz metin kalır
+    const head = item.url ? document.createElement("a") : document.createElement("span");
+    if (item.url) { head.href = item.url; head.target = "_blank"; head.rel = "noopener noreferrer"; }
+    head.style.cssText = "font-size:13.5px;font-weight:600;color:var(--ink);display:block;";
+    head.textContent = item.title;
+
+    const meta = document.createElement("div");
+    meta.className = "muted";
+    meta.style.marginTop = "3px";
+    const when = item.published ? fmt.date(item.published, "1h") + " · " : "";
+    meta.textContent = when + item.source;
+
+    wrap.append(head, meta);
+
+    if (item.summary) {
+      const summary = document.createElement("div");
+      summary.className = "sec";
+      summary.style.cssText = "font-size:12.5px;margin-top:5px;line-height:1.5;";
+      summary.textContent = item.summary;
+      wrap.appendChild(summary);
+    }
+    target.appendChild(wrap);
+  });
+}
+
+async function loadDisclosures() {
+  try {
+    const data = await (await fetch(`/api/disclosures/${SYMBOL}`)).json();
+    renderItems(document.getElementById("kap-list"), data.kap || [], "Bu dönemde bildirim yok.");
+    renderItems(document.getElementById("news-list"), data.news || [], "Haber bulunamadı.");
+  } catch (e) {
+    renderItems(document.getElementById("kap-list"), [], "Bildirimler alınamadı.");
+    renderItems(document.getElementById("news-list"), [], "Haberler alınamadı.");
+  }
+}
+
+/* ---------- Başlat ------------------------------------------------------ */
+loadPeriod(DEFAULT_PERIOD);
+loadQuote();
+loadPerformance();
+loadDisclosures();
+</script>
+{% endblock %}

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ subject }}</title>
+</head>
+{# E-posta istemcileri <style> bloklarını sık sık siler; bu yüzden tüm
+   biçimlendirme satır içi (inline) yazılmıştır ve düzen table tabanlıdır. #}
+<body style="margin:0;padding:0;background-color:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#1f2430;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:24px 12px;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,0.08);">
+
+        <!-- ==================== BAŞLIK ==================== -->
+        <tr>
+          <td style="background-color:#12263f;padding:22px 26px;">
+            <div style="font-size:19px;font-weight:700;color:#ffffff;letter-spacing:-0.2px;">
+              BIST Takip Raporu
+            </div>
+            <div style="font-size:13px;color:#9fb3c8;margin-top:5px;">
+              {{ generated_at }} · {{ report.stocks|length }} hisse takip ediliyor
+            </div>
+          </td>
+        </tr>
+
+        <!-- ==================== ÖZET ŞERİDİ ==================== -->
+        <tr>
+          <td style="padding:0 26px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px;border:1px solid #e4e7ec;border-radius:8px;">
+              <tr>
+                <td style="padding:12px 14px;text-align:center;border-right:1px solid #e4e7ec;">
+                  <div style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:0.5px;">Yükselen</div>
+                  <div style="font-size:17px;font-weight:700;color:#067647;margin-top:3px;">{{ report.gainers|length }}</div>
+                </td>
+                <td style="padding:12px 14px;text-align:center;border-right:1px solid #e4e7ec;">
+                  <div style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:0.5px;">Düşen</div>
+                  <div style="font-size:17px;font-weight:700;color:#b42318;margin-top:3px;">{{ report.losers|length }}</div>
+                </td>
+                <td style="padding:12px 14px;text-align:center;border-right:1px solid #e4e7ec;">
+                  <div style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:0.5px;">Haber</div>
+                  <div style="font-size:17px;font-weight:700;color:#12263f;margin-top:3px;">{{ report.total_news }}</div>
+                </td>
+                <td style="padding:12px 14px;text-align:center;">
+                  <div style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:0.5px;">Alarm</div>
+                  <div style="font-size:17px;font-weight:700;color:{% if report.alert_count %}#b54708{% else %}#12263f{% endif %};margin-top:3px;">{{ report.alert_count }}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ==================== ALARM ÖZETİ ==================== -->
+        {% if report.alert_count %}
+        <tr>
+          <td style="padding:16px 26px 0 26px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fffaeb;border:1px solid #fedf89;border-radius:8px;">
+              <tr>
+                <td style="padding:13px 15px;">
+                  <div style="font-size:13px;font-weight:700;color:#b54708;margin-bottom:7px;">Tetiklenen Alarmlar</div>
+                  {% for stock in report.stocks %}
+                    {% for alert in stock.alerts %}
+                    <div style="font-size:13px;color:#7a2e0e;line-height:1.5;margin-bottom:3px;">
+                      <strong>{{ stock.symbol }}</strong> — {{ alert }}
+                    </div>
+                    {% endfor %}
+                  {% endfor %}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        {% endif %}
+
+        <!-- ==================== HİSSE BÖLÜMLERİ ==================== -->
+        {% for stock in report.stocks %}
+        <tr>
+          <td style="padding:20px 26px 0 26px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e4e7ec;border-radius:10px;">
+
+              <!-- Hisse başlığı -->
+              <tr>
+                <td style="padding:14px 16px;border-bottom:1px solid #eef0f3;background-color:#fafbfc;border-radius:10px 10px 0 0;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td>
+                        <span style="font-size:16px;font-weight:700;color:#12263f;">{{ stock.symbol }}</span>
+                        {% if stock.name %}<span style="font-size:13px;color:#667085;margin-left:7px;">{{ stock.name }}</span>{% endif %}
+                      </td>
+                      <td align="right">
+                        {% if stock.alerts %}
+                        <span style="display:inline-block;background-color:#fef0c7;color:#b54708;font-size:11px;font-weight:700;padding:3px 9px;border-radius:11px;">ALARM</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- Fiyat kutusu -->
+              <tr>
+                <td style="padding:15px 16px;">
+                  {% if stock.has_price %}
+                  {% set p = stock.price %}
+                  {% set up = (p.change_percent or 0) >= 0 %}
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="vertical-align:middle;">
+                        <div style="font-size:26px;font-weight:700;color:#12263f;line-height:1.1;">
+                          {{ p.last | tl }}
+                        </div>
+                        <div style="font-size:14px;font-weight:600;margin-top:4px;color:{% if up %}#067647{% else %}#b42318{% endif %};">
+                          {{ p.change | signed }} ({{ p.change_percent | pct }})
+                        </div>
+                      </td>
+                      <td align="right" style="vertical-align:middle;font-size:12px;color:#667085;line-height:1.7;">
+                        <div>Açılış <strong style="color:#344054;">{{ p.open | tl }}</strong></div>
+                        <div>Yüksek / Düşük <strong style="color:#344054;">{{ p.high | num }} / {{ p.low | num }}</strong></div>
+                        <div>Önceki Kapanış <strong style="color:#344054;">{{ p.previous_close | tl }}</strong></div>
+                        <div>Hacim <strong style="color:#344054;">{{ p.volume | compact }}</strong>{% if p.amount %} · {{ p.amount | compact }} TL{% endif %}</div>
+                      </td>
+                    </tr>
+                  </table>
+                  <div style="font-size:11px;color:#98a2b3;margin-top:9px;">
+                    Kaynak: {{ p.source }}{% if p.updated_at %} · Güncelleme: {{ p.updated_at.strftime('%d.%m.%Y %H:%M') }}{% endif %}
+                    {% if stock.target_price %} · Hedefiniz: {{ stock.target_price | tl }}{% endif %}
+                  </div>
+                  {% else %}
+                  <div style="background-color:#fef3f2;border:1px solid #fecdca;border-radius:6px;padding:11px 13px;font-size:13px;color:#b42318;">
+                    <strong>Fiyat verisi alınamadı.</strong>
+                    {% if stock.price_error %}<div style="font-size:11px;color:#912018;margin-top:4px;word-break:break-word;">{{ stock.price_error }}</div>{% endif %}
+                  </div>
+                  {% endif %}
+                </td>
+              </tr>
+
+              <!-- Analist hedefleri -->
+              {% if stock.analyst and stock.analyst.has_data %}
+              {% set a = stock.analyst %}
+              <tr>
+                <td style="padding:0 16px 15px 16px;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f9fc;border:1px solid #eaecf5;border-radius:7px;">
+                    <tr>
+                      <td style="padding:11px 13px;">
+                        <div style="font-size:11px;font-weight:700;color:#667085;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">
+                          Analist Hedef Fiyatları
+                        </div>
+                        <div style="font-size:13px;color:#344054;line-height:1.7;">
+                          {% if a.mean %}Ortalama <strong>{{ a.mean | tl }}</strong>{% endif %}
+                          {% if a.low and a.high %} · Aralık <strong>{{ a.low | num }} – {{ a.high | num }}</strong>{% endif %}
+                          {% if a.analyst_count %} · <strong>{{ a.analyst_count }}</strong> analist{% endif %}
+                          {% if a.recommendation %} · Tavsiye <strong>{{ a.recommendation }}</strong>{% endif %}
+                          {% if a.upside_percent is not none %}
+                          · Potansiyel <strong style="color:{% if a.upside_percent >= 0 %}#067647{% else %}#b42318{% endif %};">{{ a.upside_percent | pct }}</strong>
+                          {% endif %}
+                        </div>
+                        {% if a.summary_counts %}
+                        <div style="font-size:12px;color:#667085;margin-top:5px;">
+                          {% for label, count in a.summary_counts.items() %}{{ label }}: {{ count }}{% if not loop.last %} · {% endif %}{% endfor %}
+                        </div>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              {% endif %}
+
+              <!-- KAP bildirimleri -->
+              {% if stock.kap_items or stock.kap_error %}
+              <tr>
+                <td style="padding:0 16px 6px 16px;">
+                  <div style="font-size:11px;font-weight:700;color:#667085;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">
+                    KAP Bildirimleri
+                  </div>
+                  {% if stock.kap_error %}
+                  <div style="font-size:12px;color:#b42318;background-color:#fef3f2;border-radius:5px;padding:8px 10px;">
+                    Bildirim verisi alınamadı.
+                  </div>
+                  {% endif %}
+                  {# Güvenlik: URL yalnızca http/https ise bağlantı kurulur.
+                     Şeması doğrulanmayan URL'ler providers katmanında boşaltılır
+                     ve başlık düz metin olarak gösterilir. #}
+                  {% for item in stock.kap_items %}
+                  <div style="padding:8px 0;{% if not loop.last %}border-bottom:1px solid #f2f4f7;{% endif %}">
+                    {% if item.url %}
+                    <a href="{{ item.url }}" style="font-size:13px;font-weight:600;color:#12263f;text-decoration:none;">{{ item.title }}</a>
+                    {% else %}
+                    <span style="font-size:13px;font-weight:600;color:#12263f;">{{ item.title }}</span>
+                    {% endif %}
+                    <div style="font-size:11px;color:#98a2b3;margin-top:3px;">
+                      {% if item.published %}{{ item.published.strftime('%d.%m.%Y %H:%M') }} · {% endif %}KAP
+                      {% if item.summary %}<span style="color:#667085;"> · {{ item.summary }}</span>{% endif %}
+                    </div>
+                  </div>
+                  {% endfor %}
+                </td>
+              </tr>
+              {% endif %}
+
+              <!-- Genel haberler -->
+              {% if stock.news_items or stock.news_error %}
+              <tr>
+                <td style="padding:10px 16px 14px 16px;">
+                  <div style="font-size:11px;font-weight:700;color:#667085;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">
+                    Haberler
+                  </div>
+                  {% if stock.news_error %}
+                  <div style="font-size:12px;color:#b42318;background-color:#fef3f2;border-radius:5px;padding:8px 10px;">
+                    Haber verisi alınamadı.
+                  </div>
+                  {% endif %}
+                  {% for item in stock.news_items %}
+                  <div style="padding:8px 0;{% if not loop.last %}border-bottom:1px solid #f2f4f7;{% endif %}">
+                    {% if item.url %}
+                    <a href="{{ item.url }}" style="font-size:13px;font-weight:600;color:#12263f;text-decoration:none;">{{ item.title }}</a>
+                    {% else %}
+                    <span style="font-size:13px;font-weight:600;color:#12263f;">{{ item.title }}</span>
+                    {% endif %}
+                    <div style="font-size:11px;color:#98a2b3;margin-top:3px;">
+                      {% if item.published %}{{ item.published.strftime('%d.%m.%Y %H:%M') }} · {% endif %}{{ item.source }}
+                    </div>
+                    {% if item.summary %}
+                    <div style="font-size:12px;color:#667085;line-height:1.55;margin-top:4px;">{{ item.summary }}</div>
+                    {% endif %}
+                  </div>
+                  {% endfor %}
+                </td>
+              </tr>
+              {% endif %}
+
+              {% if not stock.all_items and not stock.kap_error and not stock.news_error %}
+              <tr>
+                <td style="padding:0 16px 14px 16px;">
+                  <div style="font-size:12px;color:#98a2b3;font-style:italic;">Bugün yeni bildirim veya haber yok.</div>
+                </td>
+              </tr>
+              {% endif %}
+
+            </table>
+          </td>
+        </tr>
+        {% endfor %}
+
+        <!-- ==================== GENEL HATALAR ==================== -->
+        {% if report.global_errors %}
+        <tr>
+          <td style="padding:20px 26px 0 26px;">
+            <div style="background-color:#fef3f2;border:1px solid #fecdca;border-radius:8px;padding:12px 14px;font-size:13px;color:#b42318;">
+              {% for err in report.global_errors %}<div>{{ err }}</div>{% endfor %}
+            </div>
+          </td>
+        </tr>
+        {% endif %}
+
+        <!-- ==================== ALTBİLGİ ==================== -->
+        <tr>
+          <td style="padding:24px 26px 26px 26px;">
+            <div style="border-top:1px solid #eef0f3;padding-top:14px;font-size:11px;color:#98a2b3;line-height:1.6;">
+              Bu rapor kişisel takip amacıyla otomatik üretilmiştir; yatırım tavsiyesi değildir.
+              Fiyat verileri gecikmeli olabilir. Haber özetleri kaynak metinden kısaltılmıştır —
+              tamamı için başlıklardaki bağlantıları kullanın.
+              <br>Ayarları değiştirmek için yerel arayüz: <span style="color:#667085;">http://{{ web_host }}:{{ web_port }}</span>
+            </div>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
