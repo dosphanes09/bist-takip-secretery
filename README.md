@@ -394,7 +394,7 @@ Tarayıcıda ilk girişte `http://adres:5000/?token=DEGER` kullan; sonrası otur
 **Seçenek B — kullanıcı adı + şifre** (HTTP Basic):
 
 ```ini
-AUTH_USER=yagiz
+AUTH_USER=kullanici
 AUTH_PASSWORD=en-az-12-karakterlik-guclu-bir-sifre
 ```
 
@@ -490,3 +490,11 @@ pip-audit
 Bu araç kişisel takip amaçlıdır ve **yatırım tavsiyesi değildir**. Fiyat
 verileri gecikmeli olabilir; analist hedef fiyatları üçüncü taraf kaynaklardan
 derlenmiştir. Yatırım kararlarını resmî kaynaklardan doğrula.
+
+## Telif Hakkı / Copyright
+
+© 2026 Yağız Ali Küçük. Tüm hakları saklıdır.
+
+Bu depodaki kaynak kod ve içerik yalnızca incelenmek üzere herkese açık paylaşılmıştır. Yazılı izin olmadan kopyalanamaz, değiştirilemez, dağıtılamaz veya başka bir projede kullanılamaz.
+
+This repository is publicly visible for reference only. No license is granted: the source code and content may not be copied, modified, distributed, or used in other projects without written permission.

@@ -139,7 +139,7 @@ saygılı.
 > 50 hisselik bir listede fark 50 kat.
 
 Bir hisse için "0 bildirim" görmen normaldir; şirketler her gün açıklama
-yapmaz. Senin son çalıştırmanda GARAN 4, THYAO 1, ASELS ve TUPRS 0 bildirim
+yapmaz. Örnek bir çalıştırmada GARAN 4, THYAO 1, ASELS ve TUPRS 0 bildirim
 aldı — hepsi doğru.
 
 ### Haberler: Google News RSS

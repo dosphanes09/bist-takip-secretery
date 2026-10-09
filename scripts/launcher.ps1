@@ -67,29 +67,78 @@ Write-Host "  ──────────────────────
 Write-Host ""
 
 # ---------------------------------------------------------------------------
-# 1. Python'u bul
+# 1. Python + sanal ortam
 # ---------------------------------------------------------------------------
-$VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
+# Sanal ortamın VAR olması yetmez, ÇALIŞIYOR olması gerekir.
+#
+# .venv\Scripts\python.exe gerçek bir Python değildir; .venv\pyvenv.cfg
+# içindeki "home = ..." satırında yazan asıl Python'a yönlendiren ince bir
+# köprüdür. O asıl Python silinir, taşınır ya da sürüm yükseltmesiyle klasörü
+# değişirse köprü kırılır ve şu hatayı verir:
+#     No Python at '"C:\...\Python312\python.exe'
+# Aynı şey proje klasörünün adı/yeri değiştiğinde de olur; Windows'ta sanal
+# ortamlar taşınabilir değildir.
+#
+# Bu yüzden artık "dosya duruyor mu" diye değil, "çalışıyor mu" diye soruyoruz;
+# çalışmıyorsa bozuk ortamı silip sıfırdan kuruyoruz.
+$VenvDir    = Join-Path $ProjectRoot ".venv"
+$VenvPython = Join-Path $VenvDir "Scripts\python.exe"
 
-if (-not (Test-Path $VenvPython)) {
-    Write-Step "İlk kurulum yapılıyor (yalnızca bir kez, birkaç dakika sürebilir)"
+function Test-VenvHealthy {
+    <#
+        Sanal ortamın gerçekten çalışıp çalışmadığını sınar.
+        Kırık bir köprü hem sıfırdan farklı bir çıkış kodu döndürür hem de
+        beklenen kelimeyi yazdıramaz; iki şartı birden arıyoruz.
+    #>
+    param([string]$PythonExe)
 
-    # `py` launcher varsa onu tercih et; yoksa PATH'teki python
-    $BasePython = $null
+    if (-not (Test-Path $PythonExe)) { return $false }
+    try {
+        $probe = & $PythonExe -c "print('VENV_OK')" 2>&1 | Out-String
+        return (($LASTEXITCODE -eq 0) -and ($probe -match 'VENV_OK'))
+    } catch {
+        return $false
+    }
+}
+
+function Find-BasePython {
+    <#
+        Sistemde kurulu Python 3.10+ arar.
+        Önce `py` (Windows Python Launcher), sonra PATH'teki `python`.
+    #>
     foreach ($candidate in @("py", "python")) {
         $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
-        if ($cmd) {
-            # Sürümü doğrula (3.10+ gerekiyor)
-            try {
-                $verText = & $candidate -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
-                if ($verText -match '^(\d+)\.(\d+)$') {
-                    $major = [int]$Matches[1]; $minor = [int]$Matches[2]
-                    if ($major -eq 3 -and $minor -ge 10) { $BasePython = $candidate; break }
-                }
-            } catch { }
+        if (-not $cmd) { continue }
+        try {
+            $verText = & $candidate -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+            if ($verText -match '^(\d+)\.(\d+)$') {
+                $major = [int]$Matches[1]; $minor = [int]$Matches[2]
+                if ($major -eq 3 -and $minor -ge 10) { return $candidate }
+            }
+        } catch { }
+    }
+    return $null
+}
+
+if (-not (Test-VenvHealthy $VenvPython)) {
+
+    if (Test-Path $VenvDir) {
+        Write-Warn "Sanal ortam çalışmıyor — sıfırdan kuruluyor"
+        Write-Host "    (Python taşınmış/silinmiş ya da proje klasörü yer değiştirmiş olabilir)" -ForegroundColor DarkGray
+        try {
+            Remove-Item $VenvDir -Recurse -Force -ErrorAction Stop
+        } catch {
+            Write-Err "Eski sanal ortam silinemedi."
+            Write-Host "  Uygulama hâlâ açık olabilir. Tüm 'BIST Takip' pencerelerini kapat," -ForegroundColor Yellow
+            Write-Host "  sonra şu klasörü elle sil ve tekrar dene:" -ForegroundColor Yellow
+            Write-Host "     $VenvDir" -ForegroundColor White
+            exit 1
         }
+    } else {
+        Write-Step "İlk kurulum yapılıyor (yalnızca bir kez, birkaç dakika sürebilir)"
     }
 
+    $BasePython = Find-BasePython
     if (-not $BasePython) {
         Write-Err "Python 3.10 veya üzeri bulunamadı."
         Write-Host ""
@@ -101,8 +150,9 @@ if (-not (Test-Path $VenvPython)) {
     Write-Ok "Python bulundu ($BasePython)"
 
     Write-Step "Sanal ortam oluşturuluyor…"
-    & $BasePython -m venv .venv
-    if (-not (Test-Path $VenvPython)) {
+    & $BasePython -m venv $VenvDir
+
+    if (-not (Test-VenvHealthy $VenvPython)) {
         Write-Err "Sanal ortam oluşturulamadı."
         Write-Host "  Bu klasörün yazma izni olduğundan emin ol (Program Files ya da" -ForegroundColor Yellow
         Write-Host "  System32 gibi korumalı bir konumda olmamalı)." -ForegroundColor Yellow
@@ -136,10 +186,21 @@ if (Test-Path $depsMarker) {
 
 if ($needsInstall) {
     Write-Step "Paketler kuruluyor (ilk kurulumda birkaç dakika sürer)…"
-    & $VenvPython -m pip install --upgrade pip setuptools --quiet --disable-pip-version-check
-    & $VenvPython -m pip install -r requirements.txt --quiet --disable-pip-version-check
+
+    # Çıktıyı yakalıyoruz: başarılıysa kimse görmesin, başarısızsa GERÇEK
+    # sebep ekrana gelsin. Eskiden --quiet yüzünden yalnızca "başarısız oldu"
+    # yazıyordu ve asıl hata (ör. kırık sanal ortam) gizli kalıyordu.
+    $pipLog = & $VenvPython -m pip install --upgrade pip setuptools --disable-pip-version-check 2>&1 | Out-String
+    if ($LASTEXITCODE -eq 0) {
+        $pipLog = & $VenvPython -m pip install -r requirements.txt --disable-pip-version-check 2>&1 | Out-String
+    }
     if ($LASTEXITCODE -ne 0) {
         Write-Err "Paket kurulumu başarısız oldu."
+        Write-Host ""
+        Write-Host "  ── pip çıktısı ─────────────────────────────" -ForegroundColor DarkGray
+        Write-Host $pipLog -ForegroundColor DarkGray
+        Write-Host "  ────────────────────────────────────────────" -ForegroundColor DarkGray
+        Write-Host ""
         Write-Host "  İnternet bağlantını kontrol edip tekrar dene." -ForegroundColor Yellow
         exit 1
     }
